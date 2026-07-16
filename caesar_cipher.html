@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CAESAR CIPHER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+
+  :root {
+    --bg: #050805;
+    --green: #00ff41;
+    --green-dim: #0a9b2e;
+    --green-glow: rgba(0,255,65,0.55);
+    --panel: rgba(0,15,5,0.85);
+    --border: #145c22;
+    --blue: #00aaff;
+    --blue-glow: rgba(0,170,255,0.55);
+    --red: #ff3b3b;
+    --red-glow: rgba(255,59,59,0.55);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background:
+      radial-gradient(ellipse 80% 60% at 15% 10%, rgba(0,110,220,0.45), transparent 60%),
+      radial-gradient(ellipse 80% 60% at 85% 15%, rgba(0,200,80,0.4), transparent 60%),
+      radial-gradient(ellipse 90% 70% at 85% 90%, rgba(200,0,30,0.45), transparent 60%),
+      radial-gradient(ellipse 90% 70% at 15% 90%, rgba(0,120,90,0.4), transparent 60%),
+      radial-gradient(ellipse 100% 100% at 50% 50%, rgba(0,40,90,0.35), transparent 70%),
+      var(--bg);
+    background-color: var(--bg);
+    background-attachment: fixed;
+    font-family: 'Share Tech Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  #matrixCanvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  .scanlines {
+    pointer-events: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 3;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0.15) 1px, rgba(0,0,0,0) 2px);
+    mix-blend-mode: overlay;
+  }
+
+  .vignette {
+    pointer-events: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+    box-shadow: inset 0 0 180px rgba(0,0,0,0.6);
+  }
+
+  /* ---- Boot overlay ---- */
+  #boot {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: #000;
+    color: var(--green);
+    font-size: 14px;
+    padding: 40px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+  #boot .blink { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  #boot.hidden { display: none; }
+
+  .wrap {
+    position: relative;
+    z-index: 5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .page-title {
+    font-family: 'VT323', monospace;
+    font-size: 74px;
+    letter-spacing: 0.08em;
+    margin: 0 0 22px;
+    text-align: center;
+    background: linear-gradient(90deg, #00e5ff, #00ff41, #ff3b3b);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 30px rgba(0,255,65,0.35);
+    filter: drop-shadow(0 0 12px rgba(0,255,65,0.3));
+  }
+
+  .terminal {
+    width: 100%;
+    max-width: 560px;
+    background: var(--panel);
+    border: 2px solid transparent;
+    background-image: linear-gradient(var(--panel), var(--panel)), linear-gradient(120deg, var(--blue), var(--green), var(--red));
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    border-radius: 8px;
+    box-shadow: 0 0 25px var(--green-glow), 0 0 45px rgba(0,170,255,0.15), 0 0 60px rgba(255,59,59,0.12);
+    backdrop-filter: blur(2px);
+    overflow: hidden;
+    animation: panelPulse 4s ease-in-out infinite;
+  }
+  @keyframes panelPulse {
+    0%, 100% { box-shadow: 0 0 25px var(--green-glow), 0 0 45px rgba(0,170,255,0.15), 0 0 60px rgba(255,59,59,0.12); }
+    50% { box-shadow: 0 0 34px var(--green-glow), 0 0 65px rgba(0,170,255,0.25), 0 0 85px rgba(255,59,59,0.2); }
+  }
+
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: linear-gradient(to bottom, #0d1f0f, #081a0a);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .dot { width: 11px; height: 11px; border-radius: 50%; opacity: 0.85; }
+  .dot.red { background: #ff5f56; }
+  .dot.yellow { background: #ffbd2e; }
+  .dot.green { background: #27c93f; }
+
+  .titlebar-label {
+    margin-left: 10px;
+    color: var(--green-dim);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+
+  .nav {
+    margin-left: auto;
+    display: flex;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .nav button {
+    position: relative;
+    background: transparent;
+    border: none;
+    color: var(--green-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 6px 18px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  .nav button.active {
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    color: #001a06;
+    box-shadow: 0 0 14px var(--green-glow);
+  }
+  .nav button#decNav.active {
+    background: linear-gradient(90deg, var(--green), var(--red));
+  }
+  .nav button:hover:not(.active) { color: var(--green); }
+
+  .content { padding: 26px 28px 20px; }
+
+  .page { display: none; }
+  .page.active { display: block; animation: fadeIn 0.35s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  h1 {
+    position: relative;
+    margin: 4px 0 22px;
+    text-align: center;
+    font-family: 'VT323', monospace;
+    font-size: 50px;
+    letter-spacing: 0.06em;
+    color: #baffc9;
+    text-shadow: 0 0 6px var(--green-glow), 0 0 16px var(--blue-glow), 0 0 34px rgba(0,255,65,0.5), 0 0 60px rgba(255,59,59,0.2);
+  }
+  h1.glitch::before, h1.glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    overflow: hidden;
+    opacity: 0.8;
+  }
+  h1.glitch::before { color: #ff00c8; animation: glitchTop 6s infinite linear; clip-path: inset(0 0 60% 0); }
+  h1.glitch::after { color: #00e5ff; animation: glitchBottom 6.5s infinite linear; clip-path: inset(60% 0 0 0); }
+  @keyframes glitchTop {
+    0%, 92%, 100% { transform: translate(0,0); opacity: 0; }
+    93% { transform: translate(-3px,-1px); opacity: 0.7; }
+    94% { transform: translate(3px,1px); opacity: 0.7; }
+    95% { transform: translate(-2px,0); opacity: 0; }
+  }
+  @keyframes glitchBottom {
+    0%, 90%, 100% { transform: translate(0,0); opacity: 0; }
+    91% { transform: translate(3px,1px); opacity: 0.7; }
+    92% { transform: translate(-3px,-1px); opacity: 0.7; }
+    93% { transform: translate(2px,0); opacity: 0; }
+  }
+
+  label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    color: var(--green);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    margin: 16px 0 6px;
+  }
+  label::before { content: ""; }
+  label .count { color: var(--green-dim); font-size: 10px; }
+
+  textarea, input[type="number"], input[type="range"] {
+    width: 100%;
+    background: rgba(0,20,8,0.6);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    padding: 10px 12px;
+    resize: vertical;
+    caret-color: var(--green);
+  }
+  textarea::placeholder { color: rgba(0,255,65,0.3); }
+  textarea:focus, input:focus {
+    outline: none;
+    border-color: var(--green);
+    box-shadow: 0 0 10px rgba(0,255,65,0.35);
+  }
+
+  .shift-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .shift-row input[type="range"] { flex: 1; padding: 0; accent-color: var(--green); background: transparent; border: none; }
+  .shift-row input[type="number"] { width: 70px; text-align: center; }
+
+  .run-btn {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    background: linear-gradient(90deg, var(--blue), var(--green), var(--red));
+    background-size: 200% 100%;
+    background-position: 0% 0%;
+    border: none;
+    border-radius: 3px;
+    color: #001a06;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    box-shadow: 0 0 16px var(--green-glow), 0 0 24px rgba(0,170,255,0.25);
+    transition: transform 0.08s ease, box-shadow 0.15s ease, background-position 0.4s ease;
+  }
+  .run-btn:hover { box-shadow: 0 0 26px var(--green-glow), 0 0 34px rgba(255,59,59,0.3); background-position: 100% 0%; }
+  .run-btn:active { transform: scale(0.98); }
+
+  .result-box {
+    margin-top: 18px;
+    padding: 14px;
+    background: rgba(0,10,4,0.7);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 3px;
+    min-height: 54px;
+    font-size: 14px;
+    color: var(--green);
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    text-shadow: 0 0 4px rgba(0,255,65,0.4);
+  }
+  #encPage .result-box { border-left-color: var(--blue); box-shadow: -3px 0 12px rgba(0,170,255,0.15); }
+  #decPage .result-box { border-left-color: var(--red); box-shadow: -3px 0 12px rgba(255,59,59,0.15); }
+  .result-label { font-size: 15px; font-weight: 700; color: var(--green); letter-spacing: 0.1em; margin-bottom: 8px; text-shadow: 0 0 6px rgba(0,255,65,0.4); }
+  .result-label::before { content: "OUTPUT: "; }
+
+  .copy-btn {
+    margin-top: 10px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--green-dim);
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+  }
+  .copy-btn:hover { border-color: var(--green); color: var(--green); }
+
+  /* ---- Session log ---- */
+  .log-panel {
+    margin-top: 22px;
+    border-top: 1px dashed var(--border);
+    padding-top: 12px;
+    max-height: 110px;
+    overflow-y: auto;
+  }
+  .log-panel::-webkit-scrollbar { width: 6px; }
+  .log-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .log-title { font-size: 10px; color: var(--green-dim); letter-spacing: 0.12em; margin-bottom: 6px; }
+  .log-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--green-dim);
+    opacity: 0.9;
+    margin-bottom: 3px;
+  }
+  .log-entry .tag { color: var(--green); }
+  .log-entry .log-copy {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--green-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .log-entry .log-copy:hover { border-color: var(--green); color: var(--green); }
+
+  .status-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.35);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--green-dim);
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: linear-gradient(90deg, var(--blue), var(--green), var(--red));
+    box-shadow: 0 0 8px var(--green-glow), 0 0 10px rgba(0,170,255,0.4);
+    animation: statusPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes statusPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  @media (max-width: 480px) {
+    h1 { font-size: 32px; }
+    .page-title { font-size: 42px; }
+    .content { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="boot"><span id="bootText"></span><span class="blink">_</span></div>
+
+<canvas id="matrixCanvas"></canvas>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div class="wrap">
+  <div class="page-title">CAESAR CIPHER</div>
+  <div class="terminal">
+    <div class="titlebar">
+      <div class="dot red"></div>
+      <div class="dot yellow"></div>
+      <div class="dot green"></div>
+      <span class="titlebar-label">CAESAR CIPHER</span>
+      <div class="nav">
+        <button id="encNav" class="active">ENCRYPT</button>
+        <button id="decNav">DECRYPT</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ENCRYPT PAGE -->
+      <div class="page active" id="encPage">
+        <h1 class="glitch" data-text="ENCRYPT">ENCRYPT</h1>
+
+        <label for="encMessage">Message <span class="count" id="encCount">0 Chars</span></label>
+        <textarea id="encMessage" rows="4" placeholder="Type your message..."></textarea>
+
+        <label for="encShift">Shift Key</label>
+        <div class="shift-row">
+          <input type="range" id="encShiftRange" min="1" max="25" value="3">
+          <input type="number" id="encShift" min="1" max="25" value="3">
+        </div>
+
+        <button class="run-btn" id="encRun">[ EXECUTE ]</button>
+
+        <div class="result-box">
+          <div class="result-label"></div>
+          <div id="encResult"></div>
+        </div>
+        <button class="copy-btn" id="encCopy">copy output</button>
+      </div>
+
+      <!-- DECRYPT PAGE -->
+      <div class="page" id="decPage">
+        <h1 class="glitch" data-text="DECRYPT">DECRYPT</h1>
+
+        <label for="decMessage">Message <span class="count" id="decCount">0 Chars</span></label>
+        <textarea id="decMessage" rows="4" placeholder="Paste encrypted text..."></textarea>
+
+        <label for="decShift">Shift Key</label>
+        <div class="shift-row">
+          <input type="range" id="decShiftRange" min="1" max="25" value="3">
+          <input type="number" id="decShift" min="1" max="25" value="3">
+        </div>
+
+        <button class="run-btn" id="decRun">[ EXECUTE ]</button>
+
+        <div class="result-box">
+          <div class="result-label"></div>
+          <div id="decResult"></div>
+        </div>
+        <button class="copy-btn" id="decCopy">copy output</button>
+      </div>
+
+      <div class="log-panel" id="logPanel">
+        <div class="log-title">SESSION LOG</div>
+        <div id="logEntries"></div>
+      </div>
+
+    </div>
+
+    <div class="status-footer">
+      <span class="status-dot"></span>
+      <span>CONNECTION SECURE</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---- Boot sequence ----
+  const bootText = document.getElementById('bootText');
+  const boot = document.getElementById('boot');
+  const bootLines = [
+    "INITIALIZING SECURE SHELL...",
+    "LOADING CIPHER MODULE...",
+    "ESTABLISHING ENCRYPTED CHANNEL... OK",
+    "WELCOME, USER."
+  ];
+  let li = 0, ci = 0;
+  function typeBoot() {
+    if (li >= bootLines.length) {
+      setTimeout(() => { boot.classList.add('hidden'); }, 350);
+      return;
+    }
+    const line = bootLines[li];
+    if (ci <= line.length) {
+      bootText.textContent = bootLines.slice(0, li).join('\n') + (li > 0 ? '\n' : '') + line.slice(0, ci);
+      ci++;
+      setTimeout(typeBoot, 18);
+    } else {
+      li++; ci = 0;
+      setTimeout(typeBoot, 220);
+    }
+  }
+  typeBoot();
+
+  // ---- Matrix rain background ----
+  const canvas = document.getElementById('matrixCanvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, columns, drops;
+  const chars = "アイウエオカキクケコサシスセソ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const fontSize = 15;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    columns = Math.floor(w / fontSize);
+    drops = new Array(columns).fill(1);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function draw() {
+    ctx.fillStyle = 'rgba(5,8,5,0.08)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.font = fontSize + 'px monospace';
+    const palette = ['#00ff41', '#00ff41', '#00ff41', '#00aaff', '#ff3b3b'];
+    for (let i = 0; i < drops.length; i++) {
+      const text = chars[Math.floor(Math.random() * chars.length)];
+      const x = i * fontSize;
+      const y = drops[i] * fontSize;
+      ctx.fillStyle = Math.random() > 0.975 ? '#ffffff' : palette[Math.floor(Math.random() * palette.length)];
+      ctx.fillText(text, x, y);
+      if (y > h && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+  setInterval(draw, 45);
+
+  // ---- Page navigation ----
+  const encNav = document.getElementById('encNav');
+  const decNav = document.getElementById('decNav');
+  const encPage = document.getElementById('encPage');
+  const decPage = document.getElementById('decPage');
+
+  function showPage(page) {
+    if (page === 'encrypt') {
+      encPage.classList.add('active'); decPage.classList.remove('active');
+      encNav.classList.add('active'); decNav.classList.remove('active');
+    } else {
+      decPage.classList.add('active'); encPage.classList.remove('active');
+      decNav.classList.add('active'); encNav.classList.remove('active');
+    }
+  }
+  encNav.addEventListener('click', () => showPage('encrypt'));
+  decNav.addEventListener('click', () => showPage('decrypt'));
+
+  // ---- Cipher core ----
+  function shiftText(text, shift) {
+    shift = ((shift % 26) + 26) % 26;
+    let result = "";
+    for (const char of text) {
+      const code = char.charCodeAt(0);
+      if (code >= 65 && code <= 90) result += String.fromCharCode(((code - 65 + shift) % 26) + 65);
+      else if (code >= 97 && code <= 122) result += String.fromCharCode(((code - 97 + shift) % 26) + 97);
+      else result += char;
+    }
+    return result;
+  }
+
+  function log(msg, output) {
+    const entries = document.getElementById('logEntries');
+    const line = document.createElement('div');
+    line.className = 'log-entry';
+    const time = new Date().toLocaleTimeString('en-GB');
+    const info = document.createElement('span');
+    info.innerHTML = '<span class="tag">[' + time + ']</span> ' + msg;
+    const copyLogBtn = document.createElement('button');
+    copyLogBtn.className = 'log-copy';
+    copyLogBtn.textContent = 'copy';
+    copyLogBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(output).then(() => {
+        copyLogBtn.textContent = 'copied';
+        setTimeout(() => (copyLogBtn.textContent = 'copy'), 1000);
+      });
+    });
+    line.appendChild(info);
+    line.appendChild(copyLogBtn);
+    entries.appendChild(line);
+    const panel = document.getElementById('logPanel');
+    panel.scrollTop = panel.scrollHeight;
+  }
+
+  // ---- Encrypt page wiring ----
+  const encMessage = document.getElementById('encMessage');
+  const encShift = document.getElementById('encShift');
+  const encShiftRange = document.getElementById('encShiftRange');
+  const encResult = document.getElementById('encResult');
+  const encCount = document.getElementById('encCount');
+
+  encMessage.addEventListener('input', () => { encCount.textContent = encMessage.value.length + ' Chars'; });
+  encShiftRange.addEventListener('input', () => { encShift.value = encShiftRange.value; });
+  encShift.addEventListener('input', () => { encShiftRange.value = encShift.value; });
+
+  function runEncrypt() {
+    const message = encMessage.value;
+    const shift = parseInt(encShift.value, 10);
+    if (!message) { encResult.textContent = "ERR: no message provided."; return; }
+    if (isNaN(shift)) { encResult.textContent = "ERR: invalid shift key."; return; }
+    encResult.textContent = shiftText(message, shift);
+    log('ENCRYPT — ' + message.length + ' chars, shift ' + shift, encResult.textContent);
+  }
+  document.getElementById('encRun').addEventListener('click', runEncrypt);
+  encMessage.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') runEncrypt(); });
+
+  document.getElementById('encCopy').addEventListener('click', () => {
+    navigator.clipboard.writeText(encResult.textContent).then(() => {
+      const btn = document.getElementById('encCopy');
+      btn.textContent = 'copied to clipboard';
+      setTimeout(() => (btn.textContent = 'copy output'), 1200);
+    });
+  });
+
+  // ---- Decrypt page wiring ----
+  const decMessage = document.getElementById('decMessage');
+  const decShift = document.getElementById('decShift');
+  const decShiftRange = document.getElementById('decShiftRange');
+  const decResult = document.getElementById('decResult');
+  const decCount = document.getElementById('decCount');
+
+  decMessage.addEventListener('input', () => { decCount.textContent = decMessage.value.length + ' Chars'; });
+  decShiftRange.addEventListener('input', () => { decShift.value = decShiftRange.value; });
+  decShift.addEventListener('input', () => { decShiftRange.value = decShift.value; });
+
+  function runDecrypt() {
+    const message = decMessage.value;
+    const shift = parseInt(decShift.value, 10);
+    if (!message) { decResult.textContent = "ERR: no message provided."; return; }
+    if (isNaN(shift)) { decResult.textContent = "ERR: invalid shift key."; return; }
+    decResult.textContent = shiftText(message, -shift);
+    log('DECRYPT — ' + message.length + ' chars, shift ' + shift, decResult.textContent);
+  }
+  document.getElementById('decRun').addEventListener('click', runDecrypt);
+  decMessage.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') runDecrypt(); });
+
+  document.getElementById('decCopy').addEventListener('click', () => {
+    navigator.clipboard.writeText(decResult.textContent).then(() => {
+      const btn = document.getElementById('decCopy');
+      btn.textContent = 'copied to clipboard';
+      setTimeout(() => (btn.textContent = 'copy output'), 1200);
+    });
+  });
+</script>
+
+</body>
+</html>
